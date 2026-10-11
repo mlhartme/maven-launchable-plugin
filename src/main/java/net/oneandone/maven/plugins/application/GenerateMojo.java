@@ -15,8 +15,6 @@
  */
 package net.oneandone.maven.plugins.application;
 
-import net.oneandone.sushi.archive.Archive;
-import net.oneandone.sushi.archive.ArchiveException;
 import net.oneandone.sushi.fs.Node;
 import net.oneandone.sushi.fs.World;
 import net.oneandone.sushi.fs.file.FileNode;
@@ -24,8 +22,6 @@ import net.oneandone.sushi.util.Separator;
 import net.oneandone.sushi.util.Strings;
 import net.oneandone.sushi.util.Substitution;
 import net.oneandone.sushi.util.SubstitutionException;
-import net.oneandone.sushi.xml.Builder;
-import net.oneandone.sushi.xml.Dom;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
@@ -50,24 +46,14 @@ import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
 import org.codehaus.plexus.configuration.PlexusConfiguration;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.xml.sax.SAXException;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
@@ -94,32 +80,6 @@ public class GenerateMojo extends BaseMojo {
     private String options = "";
 
     /**
-     * Dependency jar entries to be concatenated before adding them to the application file. Comma-separated list of patterns.
-     */
-    @Parameter(defaultValue = "")
-    private String concat = "";
-
-    /**
-     * Dependency jar entries that will not be added to the application file. Comma-separated list of patterns.
-     */
-    @Parameter(defaultValue = "")
-    private String remove = "";
-
-    /**
-     * Dependency jar file entries that may overlap: the last entry will be added to the application file, all
-     * previous entries get lost. Comma-separated list of patterns.
-     */
-    @Parameter(defaultValue = "")
-    private String overwrite = "";
-
-    /**
-     * Dependency jar file entries that may be duplicates if they are equal. Comma-separated list of patterns.
-     * Only one of the duplicates will be added to the application file.
-     */
-    @Parameter(defaultValue = "")
-    private String equal = "";
-
-    /**
      * Name of the Java Executable to be invoked by the script. Only a file name, without path.
      */
     @Parameter(defaultValue = "java")
@@ -131,13 +91,6 @@ public class GenerateMojo extends BaseMojo {
      */
     @Parameter(defaultValue = "$PATH")
     private String path = "";
-
-    /**
-     * True to remove unused code from that application file. Be careful with this parameter - if your application relies on
-     * reflection or introspection, you need proper shrinkOptions to declare them.
-     */
-    @Parameter(defaultValue = "false")
-    private boolean shrink;
 
     /**
      * Copied verbatim to the launch code right before the final Java call,
@@ -159,13 +112,6 @@ public class GenerateMojo extends BaseMojo {
      */
     @Parameter
     private String launcher = null;
-
-    /**
-     * Scopes to include in compound jar. There's usually no need to touch this option.
-     * Defaults to "compile" and "runtime".
-     */
-    @Parameter
-    private List<String> scopes = Arrays.asList(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME);
 
     /**
      * Project jar to repackage when Maven has not assigned a project artifact file.
@@ -232,7 +178,6 @@ public class GenerateMojo extends BaseMojo {
         validate(name);
         // do not wipe the directory because other plugins might already have copied stuff into it
         dir.mkdirsOpt();
-        validateUnsupportedOptions();
         if (project.getArtifact().getFile() == null) {
             project.getArtifact().setFile(new File(projectJar));
         }
@@ -244,14 +189,6 @@ public class GenerateMojo extends BaseMojo {
         getLog().info(">" + size(getFile().toPath().toFile()) + getFile());
         if (attach) {
             projectHelper.attachArtifact(project, type, classifier, getFile().toPath().toFile());
-        }
-    }
-
-    private void validateUnsupportedOptions() throws MojoExecutionException {
-        if (shrink || !concat.isEmpty() || !remove.isEmpty() || !overwrite.isEmpty()
-                || !equal.isEmpty() || !scopes.equals(Arrays.asList(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME))) {
-            throw new MojoExecutionException(
-                    "Spring Boot repackage owns application packaging; shrink, concat, remove, overwrite, equal and scopes are not supported");
         }
     }
 
@@ -427,26 +364,6 @@ public class GenerateMojo extends BaseMojo {
 
     //--
 
-    private List<Artifact> getDependencies() {
-        List<Artifact> artifacts;
-        Artifact a;
-
-        artifacts = new ArrayList<>();
-        for (Iterator<?> i = project.getArtifacts().iterator(); i.hasNext();) {
-            a = (Artifact) i.next();
-            if (scopes.contains(a.getScope())) {
-                artifacts.add(a);
-            }
-        }
-        a = project.getArtifact();
-        if (a.getFile() == null) {
-            // happens if application:generate is called directly from the command line
-            a.setFile(new File(projectJar));
-        }
-        artifacts.add(a);
-        return artifacts;
-    }
-
     public String getAppVarPrefix() {
         StringBuilder builder;
         char c;
@@ -484,234 +401,4 @@ public class GenerateMojo extends BaseMojo {
         return Strings.padLeft("" + ((length + 512) / 1024), 5) + " kb ";
     }
 
-    private void addDependencies(Archive archive) throws IOException, MojoExecutionException {
-        Document plexus;
-        Sources sources;
-        File file;
-        Archive add;
-        FileNode jar;
-        List<String> duplicatePaths;
-
-        plexus = null;
-        sources = new Sources();
-        duplicatePaths = new ArrayList<>();
-        for (Artifact artifact : getDependencies()) {
-            getLog().info("+" + size(artifact.getFile()) + gav(artifact));
-            file = artifact.getFile();
-            if (file == null) {
-                throw new IllegalStateException("unresolved dependency: " + gav(artifact) + ".jar");
-            }
-            jar = world.file(file);
-            add = Archive.loadJar(jar);
-            sources.addAll(add.data, artifact);
-            removeFiles(add.data);
-            concat(add.data, archive.data);
-            copy(add.data, archive.data, duplicatePaths);
-            archive.mergeManifest(add.manifest);
-            plexus = plexusMerge(archive.data, plexus);
-        }
-        if (duplicatePaths.size() > 0) {
-            sources.retain(duplicatePaths);
-            throw new MojoExecutionException("duplicate files:\n" + sources.toString());
-        }
-        plexusSave(archive.data, plexus);
-    }
-
-    private static final String ROOT = "component-set";
-    private static final String COMPONENTS = "components";
-
-    private void copy(Node<?> srcdir, Node<?> destdir, List<String> duplicates) throws IOException, MojoExecutionException {
-        List<Node> mayEqual;
-        List<Node> mayOverwrite;
-        Node destfile;
-        String relative;
-
-        mayEqual = find(srcdir, equal);
-        mayOverwrite = find(srcdir, overwrite);
-        for (Node<?> srcfile : srcdir.find("**/*")) {
-            relative = srcfile.getRelative(srcdir);
-            destfile = destdir.join(relative);
-            if (srcfile.isDirectory()) {
-                destfile.mkdirsOpt();
-            } else {
-                if (destfile.exists()) {
-                    if (srcfile.diff(destfile)) {
-                        if (mayOverwrite.contains(srcfile)) {
-                            getLog().debug("overwrite different " + relative);
-                            destfile.deleteFile();
-                            srcfile.copyFile(destfile);
-                        } else {
-                            duplicates.add(relative);
-                        }
-                    } else {
-                        if (mayOverwrite.contains(srcfile)) {
-                            getLog().debug("overwrite equal " + relative);
-                        } else if (mayEqual.contains(srcfile)) {
-                            getLog().debug("equal " + relative);
-                        } else {
-                            duplicates.add(relative);
-                        }
-                    }
-                } else {
-                    srcfile.copyFile(destfile);
-                }
-            }
-        }
-    }
-
-    private static List<String> split(String str) throws MojoExecutionException {
-        List<String> result;
-
-        result = Separator.COMMA.split(str);
-        for (String item : result) {
-            if (item.contains(" ")) {
-                throw new MojoExecutionException(
-                        "Invalid space character in configuration value " + str + "\n" + "Use commas to separate multiple entries.");
-            }
-        }
-        return result;
-    }
-
-    private List<Node> find(Node<?> srcdir, String property) throws IOException, MojoExecutionException {
-        List<Node> mayOverwrite;
-
-        mayOverwrite = new ArrayList<>();
-        for (String p : split(property)) {
-            mayOverwrite.addAll(srcdir.find(p));
-        }
-        return mayOverwrite;
-    }
-
-    private void removeFiles(Node<?> srcdir) throws IOException, MojoExecutionException {
-        for (String p : split(remove)) {
-            removeFiles(srcdir, p);
-        }
-    }
-
-    private void removeFiles(Node<?> srcdir, String removePath) throws IOException {
-        for (Node srcfile : srcdir.find(removePath)) {
-            if (srcfile.isDirectory()) {
-                // skip - I'd delete all contained files
-            } else {
-                getLog().debug("removing " + srcfile);
-                srcfile.deleteFile();
-            }
-        }
-    }
-
-    private void concat(Node srcdir, Node<?> destdir) throws IOException, MojoExecutionException {
-        for (String p : split(concat)) {
-            getLog().debug("concatenating " + p);
-            concat(srcdir, destdir, p);
-        }
-    }
-
-    private void concat(Node<?> srcdir, Node<?> destdir, String concatPath) throws IOException {
-        for (Node srcfile : srcdir.find(concatPath)) {
-            concatOne(srcdir, destdir, srcfile.getRelative(srcdir));
-        }
-    }
-
-    private void concatOne(Node srcdir, Node destdir, String concatPath) throws IOException {
-        Node src;
-        Node dest;
-        String lf;
-        StringBuilder builder;
-        int idx;
-
-        src = srcdir.join(concatPath);
-        dest = destdir.join(concatPath);
-        if (!dest.exists()) {
-            dest.getParent().mkdirsOpt();
-            dest.writeString("");
-        }
-        lf = srcdir.getWorld().os.lineSeparator.getSeparator();
-        builder = new StringBuilder();
-        builder.append(src.readString());
-        idx = builder.lastIndexOf(lf);
-        if (idx + lf.length() != builder.length()) {
-            builder.append(lf);
-        }
-        builder.append(dest.readString());
-        dest.writeString(builder.toString());
-        src.deleteFile();
-        getLog().debug("merged " + concatPath + ":\n" + builder);
-    }
-
-    private Node plexusFile(Node root) {
-        return root.join("META-INF/plexus/components.xml");
-    }
-
-    private void plexusSave(Node root, Document plexus) throws IOException {
-        if (plexus != null) {
-            getLog().debug("merged plexus components");
-            plexusFile(root).writeXml(plexus);
-        }
-    }
-
-    private Document plexusMerge(Node root, Document plexus) throws IOException {
-        Element componentSet;
-        Element components;
-        Node file;
-
-        file = plexusFile(root);
-        if (!file.exists()) {
-            return plexus;
-        }
-        if (plexus == null) {
-            plexus = world.getXml().getBuilder().createDocument(ROOT);
-            components = Builder.element(plexus.getDocumentElement(), COMPONENTS);
-        } else {
-            components = (Element) plexus.getDocumentElement().getFirstChild();
-        }
-        try {
-            componentSet = file.readXml().getDocumentElement();
-        } catch (SAXException e) {
-            throw new IOException(file + ": " + e.getMessage());
-        }
-        if (!componentSet.getTagName().equals(ROOT)) {
-            throw new IOException(file + ": expected " + ROOT);
-        }
-        for (Element e : Dom.getAllChildElements(componentSet)) {
-            if (e.getTagName().equals(COMPONENTS)) {
-                Builder.add(components, e.getChildNodes());
-            } else {
-                throw new IOException("unknown element: " + e.getTagName());
-            }
-        }
-        file.deleteFile();
-        return plexus;
-    }
-
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z");
-
-    private void mainAttributes(Attributes attributes) throws ArchiveException {
-        attributes.putValue("Specification-Title", project.getName());
-        attributes.putValue("Specification-Version", project.getVersion());
-        attributes.putValue("Specification-Vendor", getOrganization());
-        attributes.putValue("Implementation-Title", project.getGroupId() + ":" + project.getArtifactId());
-        attributes.putValue("Implementation-Version", DATE_FORMAT.format(new Date()));
-        attributes.putValue("Implementation-Vendor", getUserEmail());
-        attributes.putValue("Main-class", main);
-    }
-
-    private String getOrganization() {
-        if (project.getOrganization() != null) {
-            return project.getOrganization().getName();
-        } else {
-            return "unknown organization";
-        }
-    }
-
-    public static String getUserEmail() {
-        String hostname;
-
-        try {
-            hostname = InetAddress.getLocalHost().getHostName();
-        } catch (UnknownHostException e) {
-            // this happens if your hostname is not in /etc/hosts and not resolvable via dns.
-            hostname = "unknownhost";
-        }
-        return System.getProperty("user.name") + "@" + hostname;
-    }
 }
