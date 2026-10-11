@@ -4,7 +4,7 @@
   <parent>
     <groupId>de.schmizzolin.maven.poms</groupId>
     <artifactId>parent</artifactId>
-    <version>1.6.5</version>
+    <version>1.8.0</version>
     <relativePath />
   </parent>
 
@@ -34,7 +34,7 @@
 
   <properties>
     <maven-license-plugin.header>${basedir}/src/license.header</maven-license-plugin.header>
-    <maven.version>3.9.7</maven.version>
+    <maven.version>3.10.0</maven.version>
   </properties>
 
   <dependencies>
@@ -65,7 +65,7 @@
     <dependency>
       <groupId>org.apache.maven.plugin-tools</groupId>
       <artifactId>maven-plugin-annotations</artifactId>
-      <version>3.13.1</version>
+      <version>3.16.0</version>
       <!-- annotations are not needed for plugin execution so we can remove this dependency
            for execution with using provided scope -->
       <scope>provided</scope>
@@ -78,7 +78,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-plugin-plugin</artifactId>
-          <version>3.13.1</version>
+          <version>3.16.0</version>
           <configuration>
             <goalPrefix>application</goalPrefix>
           </configuration>

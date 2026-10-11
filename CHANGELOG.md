@@ -8,10 +8,10 @@
 ## 2.0.0 (pending)
 
 * switch to Spring Boot's repackage goal to create the jar
-* dumped the following options: 
-  `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
+* dumped the following options: `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
 * remove Sushi dependency and use Java NIO for file operations
-* update plugin plugin and annotations 3.13.0 to 3.13.1
+* update Maven parent to 1.8.0 and Maven API to 3.10.0
+* update Maven plugin tools to 3.16.0
 
 
 ## 1.8.2 (2024-05-29)
