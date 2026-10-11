@@ -20,7 +20,6 @@ import net.oneandone.sushi.archive.ArchiveException;
 import net.oneandone.sushi.fs.Node;
 import net.oneandone.sushi.fs.World;
 import net.oneandone.sushi.fs.file.FileNode;
-import net.oneandone.sushi.io.OS;
 import net.oneandone.sushi.util.Separator;
 import net.oneandone.sushi.util.Strings;
 import net.oneandone.sushi.util.Substitution;
@@ -29,19 +28,19 @@ import net.oneandone.sushi.xml.Builder;
 import net.oneandone.sushi.xml.Dom;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.BuildPluginManager;
 import org.apache.maven.plugin.InvalidPluginDescriptorException;
+import org.apache.maven.plugin.MojoExecution;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.MojoNotFoundException;
 import org.apache.maven.plugin.PluginConfigurationException;
 import org.apache.maven.plugin.PluginDescriptorParsingException;
 import org.apache.maven.plugin.PluginManagerException;
 import org.apache.maven.plugin.PluginNotFoundException;
 import org.apache.maven.plugin.PluginResolutionException;
-import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.descriptor.MojoDescriptor;
-import org.apache.maven.model.Plugin;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -49,22 +48,15 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
-import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.codehaus.plexus.configuration.PlexusConfiguration;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
-import proguard.ClassPath;
-import proguard.ClassPathEntry;
-import proguard.Configuration;
-import proguard.ConfigurationParser;
-import proguard.ParseException;
-import proguard.ProGuard;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
@@ -146,16 +138,6 @@ public class GenerateMojo extends BaseMojo {
      */
     @Parameter(defaultValue = "false")
     private boolean shrink;
-
-    /**
-     * Proguard options as defined at http://proguard.sourceforge.net/manual/usage.html
-     * The application plugin supplied proper in- and output options, library options and  a keep option for the main
-     * method. It also disables obfuscation.
-     *
-     * Everything else you need can be defined here.
-     */
-    @Parameter(defaultValue = "")
-    private String shrinkOptions = "";
 
     /**
      * Copied verbatim to the launch code right before the final Java call,
@@ -266,7 +248,7 @@ public class GenerateMojo extends BaseMojo {
     }
 
     private void validateUnsupportedOptions() throws MojoExecutionException {
-        if (shrink || !shrinkOptions.isEmpty() || !concat.isEmpty() || !remove.isEmpty() || !overwrite.isEmpty()
+        if (shrink || !concat.isEmpty() || !remove.isEmpty() || !overwrite.isEmpty()
                 || !equal.isEmpty() || !scopes.equals(Arrays.asList(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME))) {
             throw new MojoExecutionException(
                     "Spring Boot repackage owns application packaging; shrink, concat, remove, overwrite, equal and scopes are not supported");
@@ -488,94 +470,6 @@ public class GenerateMojo extends BaseMojo {
         try (OutputStream dest = getFile().newAppendStream()) {
             world.file(jar).copyFileTo(dest);
         }
-    }
-
-    private synchronized void proguard(Archive archive) throws IOException, MojoExecutionException {
-        ProGuard pg;
-        Configuration config;
-
-        FileNode dir = world.getTemp().createTempDirectory();
-        FileNode in;
-        FileNode out;
-        FileNode log;
-        PrintStream oldOut;
-        PrintStream oldErr;
-
-        in = dir.join("in.jar");
-        out = dir.join("out.jar");
-        archive.save(in);
-
-        config = new Configuration();
-        try {
-            addConfig("-keep public class " + main + " {\n  public static void main(java.lang.String[]); \n}\n", config);
-        } catch (ParseException e) {
-            throw new IllegalStateException(e);
-        }
-        config.shrink = true;
-        config.obfuscate = false;
-        config.optimize = true;
-        config.libraryJars = cp(runtime());
-        config.programJars = cp(in);
-        config.programJars.add(new ClassPathEntry(out.toPath().toFile(), true));
-        try {
-            addConfig(shrinkOptions, config);
-        } catch (ParseException e) {
-            throw new MojoExecutionException("invalid shrink options: " + e.getMessage(), e);
-        }
-        log = world.file(projectJar).getParent().join(name + "-proguard.log");
-        oldOut = System.out;
-        oldErr = System.err;
-        try (PrintStream stream = new PrintStream(log.newOutputStream())) {
-            System.setOut(stream);
-            System.setErr(stream);
-            pg = new ProGuard(config);
-            pg.execute();
-        } catch (IOException e) {
-            getLog().error("shrink failed, see " + log + " for details");
-            throw e;
-        } finally {
-            System.setOut(oldOut);
-            System.setErr(oldErr);
-        }
-        getLog().info("-" + size(in.size() - out.size()) + "shrunk by http://proguard.sourceforge.net/");
-        try (OutputStream dest = getFile().newAppendStream()) {
-            out.copyFileTo(dest);
-        }
-    }
-
-    private void addConfig(String str, Configuration dest) throws ParseException, IOException {
-        ConfigurationParser parser;
-
-        parser = new ConfigurationParser(str, "note", world.getWorking().toPath().toFile(), System.getProperties());
-        try {
-            parser.parse(dest);
-        } finally {
-            parser.close();
-        }
-    }
-
-    private FileNode runtime() throws IOException {
-        FileNode result;
-
-        result = world.file(System.getProperty("java.home"));
-        result.checkDirectory();
-        if (OS.beforeJava9()) {
-            result = result.join("lib/rt.jar");
-        } else {
-            result = result.join("jmods/java.base.jmod");
-        }
-        result.checkFile();
-        return result;
-    }
-
-    private static ClassPath cp(FileNode... entries) {
-        ClassPath result;
-
-        result = new ClassPath();
-        for (FileNode entry : entries) {
-            result.add(new ClassPathEntry(entry.toPath().toFile(), false));
-        }
-        return result;
     }
 
     private static String gav(Artifact artifact) {

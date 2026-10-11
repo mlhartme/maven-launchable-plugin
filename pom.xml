@@ -76,12 +76,6 @@
            for execution with using provided scope -->
       <scope>provided</scope>
     </dependency>
-
-    <dependency>
-      <groupId>net.sf.proguard</groupId>
-      <artifactId>proguard-base</artifactId>
-      <version>6.2.2</version><!-- TODO: library looks dead, no updates for several years ... -->
-    </dependency>
   </dependencies>
 
   <build>

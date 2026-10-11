@@ -15,10 +15,10 @@
  */
 package net.oneandone.maven.plugins.application;
 
+import net.oneandone.sushi.fs.Node;
+import net.oneandone.sushi.fs.World;
 import net.oneandone.sushi.fs.file.FileNode;
 import org.apache.maven.plugin.AbstractMojo;
-import net.oneandone.sushi.fs.World;
-import net.oneandone.sushi.fs.Node;
 import org.apache.maven.plugins.annotations.Parameter;
 
 public abstract class BaseMojo extends AbstractMojo {
