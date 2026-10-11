@@ -38,7 +38,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
@@ -58,7 +57,7 @@ public class GenerateMojo extends AbstractMojo {
      * Directory where to place the launcher and executable jar.
      */
     @Parameter(defaultValue = "${project.build.directory}")
-    private String dir;
+    private File dir;
 
     /**
      * Name for the generated application file.
@@ -132,7 +131,7 @@ public class GenerateMojo extends AbstractMojo {
      * Path to a launcher template. Overrides the built-in template.
      */
     @Parameter
-    private String launcher = null;
+    private File launcher = null;
 
     /**
      * Project jar to repackage when Maven has not assigned a project artifact file.
@@ -156,9 +155,9 @@ public class GenerateMojo extends AbstractMojo {
     public GenerateMojo() {
     }
 
-    public GenerateMojo(Path dir, String name, String main, String classifier, String java, String path) {
+    public GenerateMojo(File dir, String name, String main, String classifier, String java, String path) {
         this.name = name;
-        this.dir = dir.toString();
+        this.dir = dir;
         this.main = main;
         this.classifier = classifier;
         this.java = java;
@@ -166,16 +165,8 @@ public class GenerateMojo extends AbstractMojo {
         this.options = "";
     }
 
-    public void setDir(String dir) {
-        this.dir = dir;
-    }
-
-    public Path getDir() {
-        return Paths.get(dir);
-    }
-
     public Path getFile() {
-        return getDir().resolve(name);
+        return dir.toPath().resolve(name);
     }
 
     public void execute() throws MojoExecutionException {
@@ -188,7 +179,7 @@ public class GenerateMojo extends AbstractMojo {
 
     public void doExecute() throws IOException, MojoExecutionException {
         validate(name);
-        Files.createDirectories(getDir());
+        Files.createDirectories(dir.toPath());
         if (project.getArtifact().getFile() == null) {
             project.getArtifact().setFile(new File(projectJar));
         }
@@ -269,7 +260,7 @@ public class GenerateMojo extends AbstractMojo {
         variables.put("javaVariable", getAppVarPrefix() + "_JAVA");
         variables.put("extensions", String.join("\n", nonEmpty(extensions)));
         if (launcher != null) {
-            str = Files.readString(Paths.get(launcher), StandardCharsets.UTF_8);
+            str = Files.readString(launcher.toPath(), StandardCharsets.UTF_8);
         } else {
             try (InputStream input = GenerateMojo.class.getResourceAsStream("/launcher")) {
                 if (input == null) {
