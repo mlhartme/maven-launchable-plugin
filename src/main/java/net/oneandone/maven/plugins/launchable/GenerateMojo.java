@@ -48,7 +48,7 @@ import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
 /**
- * Generates an application file by prepending a launch script to a Spring Boot executable jar.
+ * Generates a launchable by prepending a launch script to a Spring Boot repackaged jar.
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME,
       threadSafe = true)
@@ -60,25 +60,25 @@ public class GenerateMojo extends AbstractMojo {
     private File dir;
 
     /**
-     * Name for the generated application file.
+     * Name for the generated launchable file.
      */
     @Parameter(defaultValue = "${project.artifactId}")
     private String name;
 
     /**
-     * Classifier to deploy application files with.
+     * Classifier to deploy launchable with.
      */
-    @Parameter(defaultValue = "application")
+    @Parameter(defaultValue = "launchable")
     private String classifier = "";
 
     /**
-     * Type to deploy application files with.
+     * Type to deploy the launchable with.
      */
     @Parameter(defaultValue = "sh")
     private String type = "";
 
     /**
-     * Permissions for application file.
+     * Permissions for launchable file.
      */
     @Parameter(defaultValue = "rwxr-xr-x")
     private String permissions = "";
@@ -92,9 +92,9 @@ public class GenerateMojo extends AbstractMojo {
 
     /**
      * Fixed options passed to Java VM. You can use this to make local shell variables used in the launch
-     * script available Java. E.g. use "-Dapp=$APP" to make the fully qualified application name
+     * script available Java. E.g. use "-Dapp=$APP" to make the fully qualified launchable name
      * available as a system property "app". Another example: use "-Dapporig=$0" to get the original name
-     * this application was invoked with.
+     * this launchable was invoked with.
      */
     @Parameter(defaultValue = "")
     private String options = "";
@@ -117,11 +117,11 @@ public class GenerateMojo extends AbstractMojo {
      * placing each extension on a new line.
      * You have access to the following script variables:
      *   MAIN (the main class as specified in your pom),
-     *   NAME (application name as specified in your pom),
+     *   NAME (launchable name as specified in your pom),
      *   OPTIONS (as specified in your pom) and
-     *   APP (absolute normalized path to the application file).
+     *   APP (absolute normalized path to the launchable file).
      *
-     * Note that these variables are not exported, to access them from your application, you have to
+     * Note that these variables are not exported, to access them from your launchable, you have to
      * turn them into properties!
      */
     @Parameter
@@ -139,7 +139,7 @@ public class GenerateMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project.build.directory}/${project.build.finalName}.jar")
     private String projectJar;
 
-    /** When true, generated application files will be deployed to the Maven repository */
+    /** When true, generated launchable will be deployed to the Maven repository */
     @Parameter(defaultValue = "true")
     private boolean attach;
 
@@ -173,7 +173,7 @@ public class GenerateMojo extends AbstractMojo {
         try {
             doExecute();
         } catch (IOException e) {
-            throw new MojoExecutionException("cannot generate application: " + e.getMessage(), e);
+            throw new MojoExecutionException("cannot generate launchable: " + e.getMessage(), e);
         }
     }
 
@@ -185,7 +185,7 @@ public class GenerateMojo extends AbstractMojo {
         }
         File jar = project.getArtifact().getFile();
         if (jar.toPath().toAbsolutePath().normalize().equals(getFile().toAbsolutePath().normalize())) {
-            throw new MojoExecutionException("application output must not overwrite the original jar: " + jar);
+            throw new MojoExecutionException("launchable output must not overwrite the original jar: " + jar);
         }
         repackage(jar);
         verify(jar);
@@ -313,7 +313,7 @@ public class GenerateMojo extends AbstractMojo {
     public static void validate(String name) throws MojoExecutionException {
         for (int i = 0, max = name.length(); i < max; i++) {
             if (Character.isWhitespace(name.charAt(i))) {
-                throw new MojoExecutionException("invalid whitespace in application name: '" + name + "'");
+                throw new MojoExecutionException("invalid whitespace in launchable name: '" + name + "'");
             }
         }
     }
@@ -339,7 +339,7 @@ public class GenerateMojo extends AbstractMojo {
     public void jar(File jar) throws IOException, MojoExecutionException {
         Path output = getFile();
         if (jar.toPath().toAbsolutePath().normalize().equals(output.toAbsolutePath().normalize())) {
-            throw new MojoExecutionException("application output must not overwrite the Spring Boot jar: " + jar);
+            throw new MojoExecutionException("launchable output must not overwrite the original jar: " + jar);
         }
         try (OutputStream dest = Files.newOutputStream(output, StandardOpenOption.APPEND)) {
             Files.copy(jar.toPath(), dest);

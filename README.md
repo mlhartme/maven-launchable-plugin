@@ -1,6 +1,6 @@
-# Maven Application Plugin
+# Maven Launchable Plugin
 
-generates a *launchable* - a single self-contained executable file with your Java application.
+generates a *launchable* - a single self-contained executable file with your Java code.
 You can move the launchable around, rename it and send it to others without breaking it.
 
 The launchable is simply a shell script (aka *launcher*) with a jar file appended.
@@ -50,7 +50,7 @@ to adjust the file name and make the file executable (e.g with `chmod`). If you 
 Example: `mvn dependency:copy "-Dartifact=my.group:my-artifact:1.0.0:sh:launchable"`
 
 
-[Goal documentation](http://mlhartme.github.io/maven-application-plugin/application/plugin-info.html)
+[Goal documentation](http://mlhartme.github.io/maven-launchable-plugin/launchable/plugin-info.html)
 
 ## Alternatives
 

@@ -9,7 +9,7 @@
   </parent>
 
   <name>Maven Launchable Plugin</name>
-  <url>https://github.com/mlhartme/maven-application-plugin</url>
+  <url>https://github.com/mlhartme/maven-launchable-plugin</url>
   <description>Packages your Java code into a single file.</description>
 
   <licenses>
@@ -87,7 +87,7 @@
           <artifactId>maven-plugin-plugin</artifactId>
           <version>3.16.0</version>
           <configuration>
-            <goalPrefix>application</goalPrefix>
+            <goalPrefix>launchable</goalPrefix>
           </configuration>
           <executions>
             <execution>
