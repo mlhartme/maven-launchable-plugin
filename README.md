@@ -1,12 +1,13 @@
 # Maven Application Plugin
 
-generates an application file. An application file is a single executable file containing your Java application. It consists of a shell script
-with the executable Spring Boot jar appended. You can invoke it directly or pass it as an argument to `java -jar`. You can rename it without
-breaking the application.
+generates an application file. An application file is a single executable file containing your Java 
+application. It consists of a shell script with the executable Spring Boot jar appended. You can invoke 
+it directly or pass it as an argument to `java -jar`. You can move it around and rename it without 
+breaking the application. It's self-contained, no other files are needed to run the application. 
 
 ## Prerequisites
 
-* Java 17 or newer
+* Java 21 or newer
 * the application file works for Linux or Mac OS. Windows is not supported.
 * if you want to build the plugin: Maven 3
 
@@ -45,10 +46,7 @@ Note 2: you can use `jar tf yourapp` to list the files in the resulting applicat
 
 ## Spring Boot packaging
 
-The plugin uses Spring Boot's Loader Tools API directly to repackage the project jar with its compile- and runtime-scope dependencies, then
-wraps the executable jar in the application launcher. Set `<main>` to the application's main class. The repackage implementation is provided
-by Spring Boot Loader Tools 4.1.1; no Spring Boot Maven Plugin configuration is required.
-
+The plugin uses Spring Boot's mechanism to package a jar with all dependencies into a single file. The launcher is simply prepended to this file.
 
 ## Alternatives
 

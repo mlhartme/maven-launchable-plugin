@@ -7,12 +7,12 @@
 
 ## 2.0.0 (pending)
 
-* use Spring Boot Loader Tools API directly to create the executable jar
-* dumped the following options: `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
-* remove Sushi dependency and use Java NIO for file operations
+* create the executable jar with Spring Boot's Repackager
+  * this eliminates the need to deal with duplicate resources
+  * dumped the following options: `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
 * update Maven parent to 1.8.0 and Maven API to 3.10.0
 * update Maven plugin tools to 3.16.0
-* update Doxia Markdown module to 2.1.0
+* remove Sushi dependency and use Java NIO for file operations
 
 
 ## 1.8.2 (2024-05-29)
