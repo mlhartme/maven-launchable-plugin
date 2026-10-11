@@ -10,6 +10,7 @@
 * switch to Spring Boot's repackage goal to create the jar
 * dumped the following options: 
   `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
+* remove Sushi dependency and use Java NIO for file operations
 * update plugin plugin and annotations 3.13.0 to 3.13.1
 
 

@@ -15,13 +15,6 @@
  */
 package net.oneandone.maven.plugins.application;
 
-import net.oneandone.sushi.fs.Node;
-import net.oneandone.sushi.fs.World;
-import net.oneandone.sushi.fs.file.FileNode;
-import net.oneandone.sushi.util.Separator;
-import net.oneandone.sushi.util.Strings;
-import net.oneandone.sushi.util.Substitution;
-import net.oneandone.sushi.util.SubstitutionException;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
@@ -49,7 +42,14 @@ import org.codehaus.plexus.util.xml.Xpp3Dom;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -145,20 +145,14 @@ public class GenerateMojo extends BaseMojo {
     @Component
     protected MavenProjectHelper projectHelper;
 
-    public GenerateMojo() throws IOException {
-        this(createWorld(), null, null, null, null, null, null);
+    public GenerateMojo() {
+        super();
     }
 
-    private static World createWorld() {
-        World world = World.createMinimal();
-        world.withStandardFilesystems(false);
-        return world;
-    }
-
-    public GenerateMojo(World world, String name, FileNode dir, String main, String classifier, String java, String path) {
-        super(world);
+    public GenerateMojo(Path dir, String name, String main, String classifier, String java, String path) {
+        super();
         this.name = name;
-        this.dir = dir;
+        this.dir = dir.toString();
         this.main = main;
         this.classifier = classifier;
         this.java = java;
@@ -177,7 +171,7 @@ public class GenerateMojo extends BaseMojo {
     public void doExecute() throws IOException, MojoExecutionException {
         validate(name);
         // do not wipe the directory because other plugins might already have copied stuff into it
-        dir.mkdirsOpt();
+        Files.createDirectories(getDir());
         if (project.getArtifact().getFile() == null) {
             project.getArtifact().setFile(new File(projectJar));
         }
@@ -186,9 +180,9 @@ public class GenerateMojo extends BaseMojo {
         verify(jar);
         script();
         jar(jar);
-        getLog().info(">" + size(getFile().toPath().toFile()) + getFile());
+        getLog().info(">" + size(Files.size(getFile())) + getFile());
         if (attach) {
-            projectHelper.attachArtifact(project, type, classifier, getFile().toPath().toFile());
+            projectHelper.attachArtifact(project, type, classifier, getFile().toFile());
         }
     }
 
@@ -320,17 +314,13 @@ public class GenerateMojo extends BaseMojo {
     }
 
     private void script() throws IOException, MojoExecutionException {
-        Node file;
-
-        file = getFile();
-        file.writeString(launcherTemplate());
-        file.setPermissions(permissions);
+        Files.writeString(getFile(), launcherTemplate(), StandardCharsets.UTF_8);
+        Files.setPosixFilePermissions(getFile(), PosixFilePermissions.fromString(permissions));
     }
 
     public String launcherTemplate() throws IOException, MojoExecutionException {
         String str;
         Map<String, String> variables;
-        Node src;
 
         variables = new HashMap<>();
         variables.put("path", path);
@@ -340,19 +330,57 @@ public class GenerateMojo extends BaseMojo {
         variables.put("options", options);
         variables.put("optionsVariable", getAppVarPrefix() + "_OPTS");
         variables.put("javaVariable", getAppVarPrefix() + "_JAVA");
-        variables.put("extensions", Separator.RAW_LINE.join(extensions));
-        src = launcher != null ? world.file(launcher) : world.resource("launcher");
-        str = src.readString();
-        try {
-            return S.apply(str, variables);
-        } catch (SubstitutionException e) {
-            throw new MojoExecutionException("invalid launcher template: " + e.getMessage(), e);
+        variables.put("extensions", String.join("\n", nonEmpty(extensions)));
+        if (launcher != null) {
+            str = Files.readString(Paths.get(launcher), StandardCharsets.UTF_8);
+        } else {
+            try (InputStream input = GenerateMojo.class.getResourceAsStream("/launcher")) {
+                if (input == null) {
+                    throw new IOException("missing launcher resource");
+                }
+                str = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            }
         }
+        return substitute(str, variables);
     }
 
-    //--
+    private static String substitute(String content, Map<String, String> variables) throws MojoExecutionException {
+        StringBuilder result = new StringBuilder();
+        int start;
+        int end;
+        int last = 0;
 
-    public static final Substitution S = new Substitution("${{", "}}", '\\');
+        while ((start = content.indexOf("${{", last)) != -1) {
+            end = content.indexOf("}}", start + 3);
+            if (start > 0 && content.charAt(start - 1) == '\\') {
+                result.append(content, last, start - 1).append("${{");
+                last = start + 3;
+            } else {
+                if (end == -1) {
+                    throw new MojoExecutionException("invalid launcher template: missing end marker");
+                }
+                String variable = content.substring(start + 3, end);
+                String value = variables.get(variable);
+                if (value == null) {
+                    throw new MojoExecutionException("invalid launcher template: undefined variable: " + variable);
+                }
+                result.append(content, last, start).append(value);
+                last = end + 2;
+            }
+        }
+        result.append(content.substring(last));
+        return result.toString();
+    }
+
+    private static List<String> nonEmpty(List<String> values) {
+        List<String> result = new ArrayList<>();
+        for (String value : values) {
+            if (!value.isEmpty()) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
 
     public static void validate(String name) throws MojoExecutionException {
         for (int i = 0, max = name.length(); i < max; i++) {
@@ -381,24 +409,18 @@ public class GenerateMojo extends BaseMojo {
     }
 
     public void jar(File jar) throws IOException, MojoExecutionException {
-        if (jar.toPath().toAbsolutePath().normalize().equals(getFile().toPath().toAbsolutePath().normalize())) {
+        Path output = getFile();
+        if (jar.toPath().toAbsolutePath().normalize().equals(output.toAbsolutePath().normalize())) {
             throw new MojoExecutionException("application output must not overwrite the Spring Boot jar: " + jar);
         }
-        try (OutputStream dest = getFile().newAppendStream()) {
-            world.file(jar).copyFileTo(dest);
+        try (OutputStream dest = Files.newOutputStream(output, StandardOpenOption.APPEND)) {
+            Files.copy(jar.toPath(), dest);
         }
-    }
-
-    private static String gav(Artifact artifact) {
-        return artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion();
-    }
-
-    private static String size(File file) {
-        return size(file.length());
     }
 
     private static String size(long length) {
-        return Strings.padLeft("" + ((length + 512) / 1024), 5) + " kb ";
+        String value = Long.toString((length + 512) / 1024);
+        return " ".repeat(Math.max(0, 5 - value.length())) + value + " kb ";
     }
 
 }
