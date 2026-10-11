@@ -8,9 +8,9 @@
     <relativePath />
   </parent>
 
-  <name>Maven Application Plugin</name>
+  <name>Maven Launchable Plugin</name>
   <url>https://github.com/mlhartme/maven-application-plugin</url>
-  <description>Packages your Java application into a single executable file.</description>
+  <description>Packages your Java code into a single file.</description>
 
   <licenses>
     <license>
@@ -21,14 +21,14 @@
   </licenses>
 
   <groupId>net.oneandone.maven.plugins</groupId>
-  <artifactId>application</artifactId>
+  <artifactId>launchable</artifactId>
   <version>2.0.0-SNAPSHOT</version>
   <packaging>maven-plugin</packaging>
 
   <scm>
-    <connection>scm:git:ssh://git@github.com/mlhartme/maven-application-plugin.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/mlhartme/maven-application-plugin.git</developerConnection>
-    <url>scm:git:ssh://git@github.com/mlhartme/maven-application-plugin</url>
+    <connection>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin.git</developerConnection>
+    <url>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin</url>
     <tag>HEAD</tag>
   </scm>
 

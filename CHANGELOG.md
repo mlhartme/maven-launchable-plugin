@@ -2,12 +2,12 @@
 
 ## TODO
 
-* rename to maven-executable-plugin
 * launcher: configurable java version, use jenv and /usr/libexec/java_home to switch
 
 ## 2.0.0 (pending)
 
-* create the executable jar with Spring Boot's Repackager
+* rename to maven-launchable-plugin
+* changed the jar generation to use Spring Boot's Repackaging mechanism
   * this eliminates the need to deal with duplicate resources
   * dumped the following options: `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
 * update Maven parent to 1.8.0 and Maven API to 3.10.0
