@@ -18,6 +18,7 @@ package net.oneandone.maven.plugins.application;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
+import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.BuildPluginManager;
 import org.apache.maven.plugin.InvalidPluginDescriptorException;
 import org.apache.maven.plugin.MojoExecution;
@@ -62,7 +63,37 @@ import java.util.jar.Manifest;
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME,
       threadSafe = true)
-public class GenerateMojo extends BaseMojo {
+public class GenerateMojo extends AbstractMojo {
+    /**
+     * Directory where to place the launcher and executable jar.
+     */
+    @Parameter(defaultValue = "${project.build.directory}")
+    private String dir;
+
+    /**
+     * Name for the generated application file.
+     */
+    @Parameter(defaultValue = "${project.artifactId}")
+    private String name;
+
+    /**
+     * Classifier to deploy application files with.
+     */
+    @Parameter(defaultValue = "application")
+    private String classifier = "";
+
+    /**
+     * Type to deploy application files with.
+     */
+    @Parameter(defaultValue = "sh")
+    private String type = "";
+
+    /**
+     * Permissions for application file.
+     */
+    @Parameter(defaultValue = "rwxr-xr-x")
+    private String permissions = "";
+
     /**
      * Main class to be launched. Specified as a fully qualified Java Class name. Similar to the main class
      * specified when you start the JVM.
@@ -146,11 +177,9 @@ public class GenerateMojo extends BaseMojo {
     protected MavenProjectHelper projectHelper;
 
     public GenerateMojo() {
-        super();
     }
 
     public GenerateMojo(Path dir, String name, String main, String classifier, String java, String path) {
-        super();
         this.name = name;
         this.dir = dir.toString();
         this.main = main;
@@ -158,6 +187,18 @@ public class GenerateMojo extends BaseMojo {
         this.java = java;
         this.path = path;
         this.options = "";
+    }
+
+    public void setDir(String dir) {
+        this.dir = dir;
+    }
+
+    public Path getDir() {
+        return Paths.get(dir);
+    }
+
+    public Path getFile() {
+        return getDir().resolve(name);
     }
 
     public void execute() throws MojoExecutionException {
