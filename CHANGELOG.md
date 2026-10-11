@@ -5,8 +5,11 @@
 * rename to maven-executable-plugin
 * launcher: configurable java version, use jenv and /usr/libexec/java_home to switch
 
-## 1.8.3 (pending)
+## 2.0.0 (pending)
 
+* switch to Spring Boot's repackage goal to create the jar
+* dumped the following options: 
+  `concat`, `remove`, `overwrite`, `equal`, `scopes`, `shrink`
 * update plugin plugin and annotations 3.13.0 to 3.13.1
 
 

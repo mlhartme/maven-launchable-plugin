@@ -28,7 +28,20 @@ import net.oneandone.sushi.util.SubstitutionException;
 import net.oneandone.sushi.xml.Builder;
 import net.oneandone.sushi.xml.Dom;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.BuildPluginManager;
+import org.apache.maven.plugin.InvalidPluginDescriptorException;
+import org.apache.maven.plugin.MojoNotFoundException;
+import org.apache.maven.plugin.PluginConfigurationException;
+import org.apache.maven.plugin.PluginDescriptorParsingException;
+import org.apache.maven.plugin.PluginManagerException;
+import org.apache.maven.plugin.PluginNotFoundException;
+import org.apache.maven.plugin.PluginResolutionException;
+import org.apache.maven.plugin.MojoExecution;
+import org.apache.maven.plugin.descriptor.MojoDescriptor;
+import org.apache.maven.model.Plugin;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -36,6 +49,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.MavenProjectHelper;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
+import org.codehaus.plexus.configuration.PlexusConfiguration;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
@@ -51,9 +66,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.InetAddress;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.net.UnknownHostException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -64,9 +76,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.Attributes;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 
 /**
- * Generates an application file. Merges dependency jars into a single file, prepended with a launch shell script.
+ * Generates an application file by prepending a launch script to a Spring Boot executable jar.
  */
 @Mojo(name = "generate", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME,
       threadSafe = true)
@@ -141,7 +155,7 @@ public class GenerateMojo extends BaseMojo {
      * Everything else you need can be defined here.
      */
     @Parameter(defaultValue = "")
-    private String shrinkOptions;
+    private String shrinkOptions = "";
 
     /**
      * Copied verbatim to the launch code right before the final Java call,
@@ -172,10 +186,17 @@ public class GenerateMojo extends BaseMojo {
     private List<String> scopes = Arrays.asList(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME);
 
     /**
-     * Specifies the jar of the project to add to the application file.
+     * Project jar to repackage when Maven has not assigned a project artifact file.
      */
     @Parameter(defaultValue = "${project.build.directory}/${project.build.finalName}.jar")
     private String projectJar;
+
+    /**
+     * Version of the Spring Boot Maven Plugin. If omitted, the version is read from
+     * the project plugin configuration or its resolved Spring Boot dependency.
+     */
+    @Parameter
+    private String springBootVersion;
 
     /** When true, generated application files will be deployed to the Maven repository */
     @Parameter(defaultValue = "true")
@@ -183,6 +204,12 @@ public class GenerateMojo extends BaseMojo {
 
     @Parameter(property = "project", required = true, readonly = true)
     private MavenProject project;
+
+    @Parameter(defaultValue = "${session}", readonly = true, required = true)
+    private MavenSession session;
+
+    @Component
+    private BuildPluginManager buildPluginManager;
 
     /**
      * Maven ProjectHelper
@@ -223,35 +250,153 @@ public class GenerateMojo extends BaseMojo {
         validate(name);
         // do not wipe the directory because other plugins might already have copied stuff into it
         dir.mkdirsOpt();
+        validateUnsupportedOptions();
+        if (project.getArtifact().getFile() == null) {
+            project.getArtifact().setFile(new File(projectJar));
+        }
+        repackage();
+        File jar = project.getArtifact().getFile();
+        verify(jar);
         script();
-        jar();
+        jar(jar);
         getLog().info(">" + size(getFile().toPath().toFile()) + getFile());
-        verify();
         if (attach) {
             projectHelper.attachArtifact(project, type, classifier, getFile().toPath().toFile());
         }
     }
 
-    private void verify() throws MojoExecutionException {
-        URL url;
-        URLClassLoader loader;
-        Class<?> clazz;
+    private void validateUnsupportedOptions() throws MojoExecutionException {
+        if (shrink || !shrinkOptions.isEmpty() || !concat.isEmpty() || !remove.isEmpty() || !overwrite.isEmpty()
+                || !equal.isEmpty() || !scopes.equals(Arrays.asList(Artifact.SCOPE_COMPILE, Artifact.SCOPE_RUNTIME))) {
+            throw new MojoExecutionException(
+                    "Spring Boot repackage owns application packaging; shrink, concat, remove, overwrite, equal and scopes are not supported");
+        }
+    }
+
+    private void repackage() throws MojoExecutionException {
+        Plugin configuredPlugin;
+        Plugin plugin;
+        MojoExecution execution;
+        Xpp3Dom configuration;
+        Xpp3Dom mainClass;
+        MojoDescriptor descriptor;
+        String version;
+
+        configuredPlugin = springBootPlugin();
+        version = springBootVersion(configuredPlugin);
+        if (version == null || version.isEmpty()) {
+            throw new MojoExecutionException("cannot determine Spring Boot Maven Plugin version; set springBootVersion "
+                    + "or declare a Spring Boot dependency/plugin version");
+        }
+        plugin = new Plugin();
+        plugin.setGroupId("org.springframework.boot");
+        plugin.setArtifactId("spring-boot-maven-plugin");
+        plugin.setVersion(version);
 
         try {
-            url = getFile().toPath().toFile().toURI().toURL();
-        } catch (MalformedURLException e) {
-            throw new IllegalStateException();
+            descriptor = buildPluginManager.getMojoDescriptor(plugin, "repackage",
+                    project.getRemotePluginRepositories(), session.getRepositorySession());
+            configuration = toXpp3Dom(descriptor.getMojoConfiguration());
+            if (!"configuration".equals(configuration.getName())) {
+                Xpp3Dom root = new Xpp3Dom("configuration");
+                root.addChild(configuration);
+                configuration = root;
+            }
+            if (configuredPlugin != null && configuredPlugin.getConfiguration() instanceof Xpp3Dom) {
+                configuration = Xpp3Dom.mergeXpp3Dom(
+                        new Xpp3Dom((Xpp3Dom) configuredPlugin.getConfiguration()), configuration);
+            }
+            mainClass = configuration.getChild("mainClass");
+            if (mainClass == null) {
+                mainClass = new Xpp3Dom("mainClass");
+                configuration.addChild(mainClass);
+            }
+            mainClass.setValue(main);
+            execution = new MojoExecution(descriptor, "application-plugin-repackage");
+            execution.setConfiguration(configuration);
+            buildPluginManager.executeMojo(session, execution);
+        } catch (MojoFailureException | PluginConfigurationException | PluginManagerException | PluginNotFoundException
+                 | PluginResolutionException | PluginDescriptorParsingException | MojoNotFoundException
+                 | InvalidPluginDescriptorException e) {
+            throw new MojoExecutionException("Spring Boot repackage failed: " + e.getMessage(), e);
         }
-        loader = new URLClassLoader(new URL[] { url });
-        try {
-            clazz = loader.loadClass(main);
-        } catch (ClassNotFoundException e) {
-            throw new MojoExecutionException("main class not found: " + main, e);
+    }
+
+    private static Xpp3Dom toXpp3Dom(PlexusConfiguration configuration) {
+        Xpp3Dom result;
+
+        result = new Xpp3Dom(configuration.getName());
+        result.setValue(configuration.getValue(null));
+        for (String attribute : configuration.getAttributeNames()) {
+            result.setAttribute(attribute, configuration.getAttribute(attribute, null));
         }
-        try {
-            clazz.getDeclaredMethod("main", String[].class);
-        } catch (NoSuchMethodException e) {
-            throw new MojoExecutionException("main class has no main(String[]) method: " + main, e);
+        for (PlexusConfiguration child : configuration.getChildren()) {
+            result.addChild(toXpp3Dom(child));
+        }
+        return result;
+    }
+
+    private Plugin springBootPlugin() {
+        Plugin plugin;
+
+        if (project.getBuild() == null) {
+            return null;
+        }
+        for (Plugin candidate : project.getBuild().getPlugins()) {
+            if ("org.springframework.boot".equals(candidate.getGroupId())
+                    && "spring-boot-maven-plugin".equals(candidate.getArtifactId())) {
+                return candidate;
+            }
+        }
+        if (project.getBuild().getPluginManagement() != null) {
+            for (Plugin candidate : project.getBuild().getPluginManagement().getPlugins()) {
+                if ("org.springframework.boot".equals(candidate.getGroupId())
+                        && "spring-boot-maven-plugin".equals(candidate.getArtifactId())) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String springBootVersion(Plugin configuredPlugin) {
+        String version;
+
+        version = springBootVersion;
+        if (version == null || version.isEmpty()) {
+            version = project.getProperties().getProperty("spring-boot.version");
+        }
+        if ((version == null || version.isEmpty()) && configuredPlugin != null) {
+            version = configuredPlugin.getVersion();
+        }
+        if (version == null || version.isEmpty()) {
+            for (Artifact artifact : project.getArtifacts()) {
+                if ("org.springframework.boot".equals(artifact.getGroupId()) && "spring-boot".equals(artifact.getArtifactId())) {
+                    return artifact.getVersion();
+                }
+            }
+        }
+        return version;
+    }
+
+    private void verify(File jar) throws MojoExecutionException {
+        Manifest manifest;
+        String startClass;
+
+        if (jar == null || !jar.isFile()) {
+            throw new MojoExecutionException("Spring Boot repackage did not produce an application jar");
+        }
+        try (JarFile jarFile = new JarFile(jar)) {
+            manifest = jarFile.getManifest();
+        } catch (IOException e) {
+            throw new MojoExecutionException("cannot read repackaged jar " + jar + ": " + e.getMessage(), e);
+        }
+        if (manifest == null) {
+            throw new MojoExecutionException("Spring Boot repackage did not add a manifest to " + jar);
+        }
+        startClass = manifest.getMainAttributes().getValue("Start-Class");
+        if (!main.equals(startClass)) {
+            throw new MojoExecutionException("Spring Boot jar Start-Class is " + startClass + ", expected " + main);
         }
     }
 
@@ -336,21 +481,12 @@ public class GenerateMojo extends BaseMojo {
         return builder.toString();
     }
 
-    public void jar() throws IOException, MojoExecutionException {
-        Archive archive;
-
-        archive = Archive.createJar(world);
-        addDependencies(archive);
-        if (!archive.data.join(main.replace('.', '/') + ".class").isFile()) {
-            throw new MojoExecutionException("main class not found: " + main);
+    public void jar(File jar) throws IOException, MojoExecutionException {
+        if (jar.toPath().toAbsolutePath().normalize().equals(getFile().toPath().toAbsolutePath().normalize())) {
+            throw new MojoExecutionException("application output must not overwrite the Spring Boot jar: " + jar);
         }
-        mainAttributes(archive.manifest.getMainAttributes());
-        if (shrink) {
-            proguard(archive);
-        } else {
-            try (OutputStream dest = getFile().newAppendStream()) {
-                archive.save(dest);
-            }
+        try (OutputStream dest = getFile().newAppendStream()) {
+            world.file(jar).copyFileTo(dest);
         }
     }
 
