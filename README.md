@@ -45,10 +45,9 @@ Note 2: you can use `jar tf yourapp` to list the files in the resulting applicat
 
 ## Spring Boot packaging
 
-The plugin internally invokes Spring Boot's `repackage` goal automatically and wraps its executable jar in the application launcher. 
-Set `<main>` to the application's main class. The Spring Boot Maven Plugin version is taken from, in order, `<springBootVersion>`, the
-`spring-boot.version` project property, a declared Spring Boot Maven Plugin version, or the resolved `org.springframework.boot:spring-boot`
-dependency version. Set `<springBootVersion>` when the version cannot be inferred.
+The plugin uses Spring Boot's Loader Tools API directly to repackage the project jar with its compile- and runtime-scope dependencies, then
+wraps the executable jar in the application launcher. Set `<main>` to the application's main class. The repackage implementation is provided
+by Spring Boot Loader Tools 4.1.1; no Spring Boot Maven Plugin configuration is required.
 
 
 ## Alternatives
