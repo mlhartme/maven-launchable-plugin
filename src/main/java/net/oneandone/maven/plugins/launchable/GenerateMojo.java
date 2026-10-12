@@ -57,7 +57,7 @@ public class GenerateMojo extends AbstractMojo {
      * Directory where to place the launcher and executable jar.
      */
     @Parameter(defaultValue = "${project.build.directory}")
-    private File dir;
+    private File buildDirectory;
 
     /**
      * Name for the generated launchable file.
@@ -155,20 +155,6 @@ public class GenerateMojo extends AbstractMojo {
     public GenerateMojo() {
     }
 
-    public GenerateMojo(File dir, String name, String main, String classifier, String java, String path) {
-        this.name = name;
-        this.dir = dir;
-        this.main = main;
-        this.classifier = classifier;
-        this.java = java;
-        this.path = path;
-        this.options = "";
-    }
-
-    public Path getFile() {
-        return dir.toPath().resolve(name);
-    }
-
     public void execute() throws MojoExecutionException {
         try {
             doExecute();
@@ -179,27 +165,33 @@ public class GenerateMojo extends AbstractMojo {
 
     public void doExecute() throws IOException, MojoExecutionException {
         validate(name);
-        Files.createDirectories(dir.toPath());
+        Files.createDirectories(buildDirectory.toPath());
         if (project.getArtifact().getFile() == null) {
             project.getArtifact().setFile(new File(projectJar));
         }
-        File jar = project.getArtifact().getFile();
-        if (jar.toPath().toAbsolutePath().normalize().equals(getFile().toAbsolutePath().normalize())) {
-            throw new MojoExecutionException("launchable output must not overwrite the original jar: " + jar);
-        }
-        repackage(jar);
-        verify(jar);
-        save(jar);
-        getLog().info(">" + size(Files.size(getFile())) + getFile());
+
+        var sourceJar = project.getArtifact().getFile().toPath();
+        var repackagedJar = Files.createTempFile("repackaged", ".jar");
+        var launchable = buildDirectory.toPath().resolve(project.getBuild().getFinalName() + (classifier.isEmpty() ? "" : "-" + classifier) + "." + type);
+        var symlink = buildDirectory.toPath().resolve(name);
+
+        repackage(sourceJar, repackagedJar);
+        verify(repackagedJar);
+        write(repackagedJar, launchable);
+        Files.createSymbolicLink(
+                buildDirectory.toPath().relativize(symlink),
+                buildDirectory.toPath().relativize(launchable));
+
+        getLog().info("generated " + launchable + size(Files.size(launchable)));
         if (attach) {
-            projectHelper.attachArtifact(project, type, classifier, getFile().toFile());
+            projectHelper.attachArtifact(project, type, classifier, launchable.toFile());
         }
     }
 
-    private void repackage(File jar) throws IOException {
-        Repackager repackager = new Repackager(jar);
+    private void repackage(Path sourceJar, Path destJar) throws IOException {
+        Repackager repackager = new Repackager(sourceJar.toFile());
         repackager.setMainClass(main);
-        repackager.repackage(libraries());
+        repackager.repackage(destJar.toFile(), libraries());
     }
 
     private Libraries libraries() {
@@ -224,11 +216,11 @@ public class GenerateMojo extends AbstractMojo {
         };
     }
 
-    private void verify(File jar) throws MojoExecutionException, IOException {
+    private void verify(Path jar) throws MojoExecutionException, IOException {
         Manifest manifest;
         String startClass;
 
-        try (JarFile jarFile = new JarFile(jar)) {
+        try (JarFile jarFile = new JarFile(jar.toFile())) {
             manifest = jarFile.getManifest();
         }
         if (manifest == null) {
@@ -240,16 +232,12 @@ public class GenerateMojo extends AbstractMojo {
         }
     }
 
-    private void save(File jar) throws IOException, MojoExecutionException {
-        Path output = getFile();
-        Files.writeString(output, launcherTemplate(), StandardCharsets.UTF_8);
-        Files.setPosixFilePermissions(output, PosixFilePermissions.fromString(permissions));
-        if (jar.toPath().toAbsolutePath().normalize().equals(output.toAbsolutePath().normalize())) {
-            throw new MojoExecutionException("launchable output must not overwrite the original jar: " + jar);
+    private void write(Path repackaged, Path launchable) throws IOException, MojoExecutionException {
+        Files.writeString(launchable, launcherTemplate(), StandardCharsets.UTF_8);
+        try (OutputStream os = Files.newOutputStream(launchable, StandardOpenOption.APPEND)) {
+            Files.copy(repackaged, os);
         }
-        try (OutputStream dest = Files.newOutputStream(output, StandardOpenOption.APPEND)) {
-            Files.copy(jar.toPath(), dest);
-        }
+        Files.setPosixFilePermissions(launchable, PosixFilePermissions.fromString(permissions));
     }
 
     public String launcherTemplate() throws IOException, MojoExecutionException {
