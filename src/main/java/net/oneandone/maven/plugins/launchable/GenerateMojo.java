@@ -178,9 +178,7 @@ public class GenerateMojo extends AbstractMojo {
         repackage(sourceJar, repackagedJar);
         verify(repackagedJar);
         write(repackagedJar, launchable);
-        Files.createSymbolicLink(
-                buildDirectory.toPath().relativize(symlink),
-                buildDirectory.toPath().relativize(launchable));
+        Files.createSymbolicLink(symlink, launchable.getFileName());
 
         getLog().info("generated " + launchable + size(Files.size(launchable)));
         if (attach) {
