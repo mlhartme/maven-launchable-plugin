@@ -2,12 +2,14 @@
 
 generates a *launchable* - a single self-contained executable file with your Java code.
 You can move the launchable around, rename it and send it to others without breaking it.
+If Java is installed, the launchable behaves like a native file.
 
 The launchable is simply a shell script (aka *launcher*) with a jar file appended.
-Unix sees the launchable as a shell script - thus, if can run it. 
+Unix sees the launchable as a shell script - thus, it can run it. 
 Java tools see it as a jar file - thus, they can use it in the classpath.
-The jar is generate like Spring Boot's "repackaged" files; in fact, it uses Spring Boot's mechanism to package a jar with all dependencies into a single file. The launcher is simply prepended to this file.
-
+The jar is generate like Spring Boot's "repackaged" files; in fact, it uses Spring Boot's 
+mechanism to package a jar with all dependencies into a single file. The launcher is simply 
+prepended to this file.
 
 
 ## Prerequisites
