@@ -1,15 +1,16 @@
 # Maven Launchable Plugin
 
-generates a *launchable* - a single self-contained executable file with your Java code.
+generates a *launchable* - a single self-contained file with your Java code.
+If Java is installed, the launchable can be executed as is, it behaves like a native file.
 You can move the launchable around, rename it and send it to others without breaking it.
-If Java is installed, the launchable behaves like a native file.
 
 The launchable is simply a shell script (aka *launcher*) with a jar file appended.
-Unix sees the launchable as a shell script - thus, it can run it. 
-Java tools see it as a jar file - thus, they can use it in the classpath.
-The jar is generate like Spring Boot's "repackaged" files; in fact, it uses Spring Boot's 
-mechanism to package a jar with all dependencies into a single file. The launcher is simply 
-prepended to this file.
+Unix sees the launchable as a shell script - thus, it can execute it. 
+Java tools see it as a jar file - thus, they can use it in their classpath.
+
+Implementation: The jar part of the launchable is generated like Spring Boot's "repackaged" 
+files; in fact, it uses Spring Boot's mechanism to package a jar with all dependencies into 
+a single file. The launcher is simply prepended to this file.
 
 
 ## Prerequisites
@@ -39,13 +40,13 @@ Add
       </executions>
     </plugin>
 
-to the build/plugins element in your pom.xml and run `mvn clean package` to generate the launchable `target/yourapp`.
+to your pom.xml and run `mvn clean package` to generate the launchable `target/yourapp`.
 
 ## Deployment
 
 Run `mvn deploy` to deploy a launchable to a Maven repository. The plugin attaches your launchable 
 to the build and thus Maven will upload it into your repository. Please note that the launchable 
-file name in the repository is your projects artifact name with "-launchable.sh" appended, it's not 
+file name in the repository is your project's artifact name with "-launchable.sh" appended, it's not 
 the name you specified with the name parameter. If users download launchables from the repository, they have 
 to adjust the file name and make the file executable (e.g with `chmod`). If you want to download with the 
 `maven-dependency-plugin`, specify the artifacts of your project together with classifier `launchable` and type `sh`. 
