@@ -189,8 +189,7 @@ public class GenerateMojo extends AbstractMojo {
         }
         repackage(jar);
         verify(jar);
-        script();
-        jar(jar);
+        save(jar);
         getLog().info(">" + size(Files.size(getFile())) + getFile());
         if (attach) {
             projectHelper.attachArtifact(project, type, classifier, getFile().toFile());
@@ -241,9 +240,16 @@ public class GenerateMojo extends AbstractMojo {
         }
     }
 
-    private void script() throws IOException, MojoExecutionException {
-        Files.writeString(getFile(), launcherTemplate(), StandardCharsets.UTF_8);
-        Files.setPosixFilePermissions(getFile(), PosixFilePermissions.fromString(permissions));
+    private void save(File jar) throws IOException, MojoExecutionException {
+        Path output = getFile();
+        Files.writeString(output, launcherTemplate(), StandardCharsets.UTF_8);
+        Files.setPosixFilePermissions(output, PosixFilePermissions.fromString(permissions));
+        if (jar.toPath().toAbsolutePath().normalize().equals(output.toAbsolutePath().normalize())) {
+            throw new MojoExecutionException("launchable output must not overwrite the original jar: " + jar);
+        }
+        try (OutputStream dest = Files.newOutputStream(output, StandardOpenOption.APPEND)) {
+            Files.copy(jar.toPath(), dest);
+        }
     }
 
     public String launcherTemplate() throws IOException, MojoExecutionException {
@@ -334,16 +340,6 @@ public class GenerateMojo extends AbstractMojo {
             }
         }
         return builder.toString();
-    }
-
-    public void jar(File jar) throws IOException, MojoExecutionException {
-        Path output = getFile();
-        if (jar.toPath().toAbsolutePath().normalize().equals(output.toAbsolutePath().normalize())) {
-            throw new MojoExecutionException("launchable output must not overwrite the original jar: " + jar);
-        }
-        try (OutputStream dest = Files.newOutputStream(output, StandardOpenOption.APPEND)) {
-            Files.copy(jar.toPath(), dest);
-        }
     }
 
     private static String size(long length) {
