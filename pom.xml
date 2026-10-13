@@ -26,9 +26,9 @@
   <packaging>maven-plugin</packaging>
 
   <scm>
-    <connection>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin.git</developerConnection>
-    <url>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin</url>
+    <connection>scm:git:https://github.com/mlhartme/maven-launchable-plugin.git</connection>
+    <developerConnection>scm:git:https://github.com/mlhartme/maven-launchable-plugin.git</developerConnection>
+    <url>https://github.com/mlhartme/maven-launchable-plugin</url>
     <tag>HEAD</tag>
   </scm>
 
