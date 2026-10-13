@@ -1,13 +1,22 @@
-# Maven Application Plugin
+# Maven Launchable Plugin
 
-generates an application file. An application file is a single executable file containing your entire Java application, it's all you need to distribute and run it. 
-Technically, an application file is a shell script with an appended executable jar file (which contains all application classes and its dependencies). 
-You can invoke it directly or you can pass it as an argument to java -jar. You can rename it without breaking the application.
+generates a *launchable* - a single file with your Java application.
+If Java is installed, the launchable can be executed as is, it behaves like a native file.
+It's self-contained, you can move the launchable around, rename it and send it to others.
+
+Technically, the launchable is a shell script (aka *launcher*) with a jar file appended.
+Unix sees the launchable as a shell script - thus, it can execute it. 
+Java sees it as a jar file - thus, it can use it in its classpath.
+
+Implementation: The jar part of the launchable is generated like Spring Boot's "repackaged" 
+files; in fact, it uses Spring Boot's mechanism to package a jar with all dependencies into 
+a single file. The launcher is simply prepended to this file.
+
 
 ## Prerequisites
 
-* Java 8 or newer
-* the application file works for Linux or Mac OS. Windows is not supported - contributions welcome!
+* Java 21 or newer
+* the launchable works for Linux or macOS. Windows is not supported.
 * if you want to build the plugin: Maven 3
 
 ## Setup
@@ -16,8 +25,8 @@ Add
 
     <plugin>
       <groupId>net.oneandone.maven.plugins</groupId>
-      <artifactId>application</artifactId>
-      <version>1.7.0</version>
+      <artifactId>launchable</artifactId>
+      <version>2.0.0</version>
       <configuration>
         <name>yourapp</name>
         <main>foo.yourapp.Main</main>
@@ -31,44 +40,20 @@ Add
       </executions>
     </plugin>
 
-to the build/plugins element in your pom.xml and run `mvn clean package` to generate the application file `target/yourapp`.
+to your pom.xml and run `mvn clean package` to generate the launchable `target/yourapp`.
 
-Note: to deploy the application into your Maven repository, run mvn deploy. The plugin attaches your application file and thus Maven will 
-upload it into your repository. Please note that the deployed application file name is your projects artifact name with "-application.sh" 
-appended, it's not the name you specified with the name parameter. If users download application files from the repository, they have to 
-adjust the file name and make the file executable (e.g with `chmod`). If you want to download with the `maven-dependency-plugin`, specify
-the artifacts of your probject together with classifier `application` and `sh`. Example: `mvn dependency:copy "-Dartifact=my.group:my-artifact:1.0.0:sh:application"
+## Deployment
 
-Note 2: you can use `jar tf yourapp` to list the files in the resulting application file.
+Run `mvn deploy` to deploy a launchable to a Maven repository. The plugin attaches your launchable 
+to the build and thus Maven will upload it into your repository. Please note that the launchable 
+file name in the repository is your project's artifact name with "-launchable.sh" appended, it's not 
+the name you specified with the name parameter. If users download launchables from the repository, they have 
+to adjust the file name and make the file executable (e.g with `chmod`). If you want to download with the 
+`maven-dependency-plugin`, specify the artifacts of your project together with classifier `launchable` and type `sh`. 
+Example: `mvn dependency:copy "-Dartifact=my.group:my-artifact:1.0.0:sh:launchable"`
 
-[Goal documentation](http://mlhartme.github.io/maven-application-plugin/application/plugin-info.html)
 
-
-## Duplicate Files
-
-The application file contains a jar file that's a merger of all transitve dependencies of type jar (runtime and compile) plus the classes 
-in your project. What happens if two dependencies contain a file foo/bar.class? Without additional configuration, the plugin aborts with an
-"duplicate file" error.
-
-To fix this, you have to configure how to handle the duplicate file. You have four options:
-
-  * overwrite: the file from the last dependency is added to the application file
-  * equal: duplicate files are accepted if they have equal content; one copy is added to the application file
-  * concat: duplicate files will be concatenated, the result is added to the application file
-  * remove: none of the files will be added to the application file
-
-For example, you can add the parameter
-
-    <equal>foo/bar.class</equal>
-
-to the plugin configuration. This will fix your build if all "foo/bar.class" files in your dependencies have equal content. The plugins will abort with an error if the files differ.
-
-All parameters accept comma-separated paths with Ant-style wild cards. For example, 
-
-    <remove>**/README*, **/readme*</remove>
-
-would remove all readmes from the application file.
-
+[Goal documentation](http://mlhartme.github.io/maven-launchable-plugin/launchable/plugin-info.html)
 
 ## Alternatives
 
@@ -77,6 +62,3 @@ Other plugins with similar functionality:
   * Maven's [Shade Plugin](http://maven.apache.org/plugins/maven-shade-plugin/plugin-info.html) can package all classes into a single jar file,
     possibly renaming duplicate classes
   * Maven's [Assembly Plugin](http://maven.apache.org/plugins/maven-assembly-plugin/) can create arbitrary archives, including jars.
-  * Springboot's Maven Plugin (namely the repackage goal) packages jar files and the classes directory and adds a special class loader to dispatch
-    resource loading into the packaged files and directory. This approach avoids the need to fix dupliciate resources, but it needs
-    extra code and magic do setup proper class loading. As a result, it's probably slower at runtime.

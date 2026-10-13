@@ -4,13 +4,13 @@
   <parent>
     <groupId>de.schmizzolin.maven.poms</groupId>
     <artifactId>parent</artifactId>
-    <version>1.6.5</version>
+    <version>1.8.0</version>
     <relativePath />
   </parent>
 
-  <name>Maven Application Plugin</name>
-  <url>https://github.com/mlhartme/maven-application-plugin</url>
-  <description>Packages your Java application into a single executable file.</description>
+  <name>Maven Launchable Plugin</name>
+  <url>https://github.com/mlhartme/maven-launchable-plugin</url>
+  <description>Packages your Java code into a single file.</description>
 
   <licenses>
     <license>
@@ -21,27 +21,28 @@
   </licenses>
 
   <groupId>net.oneandone.maven.plugins</groupId>
-  <artifactId>application</artifactId>
-  <version>1.8.3-SNAPSHOT</version>
+  <artifactId>launchable</artifactId>
+  <version>2.0.0-SNAPSHOT</version>
   <packaging>maven-plugin</packaging>
 
   <scm>
-    <connection>scm:git:ssh://git@github.com/mlhartme/maven-application-plugin.git</connection>
-    <developerConnection>scm:git:ssh://git@github.com/mlhartme/maven-application-plugin.git</developerConnection>
-    <url>scm:git:ssh://git@github.com/mlhartme/maven-application-plugin</url>
+    <connection>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin.git</developerConnection>
+    <url>scm:git:ssh://git@github.com/mlhartme/maven-launchable-plugin</url>
     <tag>HEAD</tag>
   </scm>
 
   <properties>
     <maven-license-plugin.header>${basedir}/src/license.header</maven-license-plugin.header>
-    <maven.version>3.9.7</maven.version>
+    <maven.version>3.10.0</maven.version>
+    <spring-boot-loader-tools.version>4.1.1</spring-boot-loader-tools.version>
   </properties>
 
   <dependencies>
     <dependency>
-      <groupId>net.oneandone</groupId>
-      <artifactId>sushi</artifactId>
-      <version>3.3.0</version>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-loader-tools</artifactId>
+      <version>${spring-boot-loader-tools.version}</version>
     </dependency>
 
     <dependency>
@@ -71,16 +72,10 @@
     <dependency>
       <groupId>org.apache.maven.plugin-tools</groupId>
       <artifactId>maven-plugin-annotations</artifactId>
-      <version>3.13.1</version>
+      <version>3.16.0</version>
       <!-- annotations are not needed for plugin execution so we can remove this dependency
            for execution with using provided scope -->
       <scope>provided</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>net.sf.proguard</groupId>
-      <artifactId>proguard-base</artifactId>
-      <version>6.2.2</version><!-- TODO: library looks dead, no updates for several years ... -->
     </dependency>
   </dependencies>
 
@@ -90,9 +85,9 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-plugin-plugin</artifactId>
-          <version>3.13.1</version>
+          <version>3.16.0</version>
           <configuration>
-            <goalPrefix>application</goalPrefix>
+            <goalPrefix>launchable</goalPrefix>
           </configuration>
           <executions>
             <execution>
