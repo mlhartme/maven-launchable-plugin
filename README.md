@@ -1,12 +1,12 @@
 # Maven Launchable Plugin
 
-generates a *launchable* - a single self-contained file with your Java code.
+generates a *launchable* - a single file with your Java application.
 If Java is installed, the launchable can be executed as is, it behaves like a native file.
-You can move the launchable around, rename it and send it to others without breaking it.
+It's self-contained, you can move the launchable around, rename it and send it to others.
 
-The launchable is simply a shell script (aka *launcher*) with a jar file appended.
+Technically, the launchable is a shell script (aka *launcher*) with a jar file appended.
 Unix sees the launchable as a shell script - thus, it can execute it. 
-Java tools see it as a jar file - thus, they can use it in their classpath.
+Java sees it as a jar file - thus, it can use it in its classpath.
 
 Implementation: The jar part of the launchable is generated like Spring Boot's "repackaged" 
 files; in fact, it uses Spring Boot's mechanism to package a jar with all dependencies into 

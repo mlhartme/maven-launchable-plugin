@@ -50,8 +50,8 @@ import java.util.jar.Manifest;
 /**
  * Generates a launchable by prepending a launch script to a Spring Boot repackaged jar.
  */
-@Mojo(name = "generate", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.RUNTIME,
-      threadSafe = true)
+@Mojo(name = "generate", defaultPhase = LifecyclePhase.PACKAGE,
+        requiresDependencyResolution = ResolutionScope.RUNTIME, threadSafe = true)
 public class GenerateMojo extends AbstractMojo {
     /**
      * Directory where to place the launcher and executable jar.
@@ -172,13 +172,13 @@ public class GenerateMojo extends AbstractMojo {
 
         var sourceJar = project.getArtifact().getFile().toPath();
         var repackagedJar = Files.createTempFile("repackaged", ".jar");
+        repackagedJar.toFile().deleteOnExit();
         var launchable = buildDirectory.toPath().resolve(project.getBuild().getFinalName() + (classifier.isEmpty() ? "" : "-" + classifier) + "." + type);
-        var symlink = buildDirectory.toPath().resolve(name);
 
         repackage(sourceJar, repackagedJar);
         verify(repackagedJar);
         write(repackagedJar, launchable);
-        Files.createSymbolicLink(symlink, launchable.getFileName());
+        Files.createSymbolicLink(buildDirectory.toPath().resolve(name), launchable.getFileName());
 
         getLog().info("generated " + launchable + size(Files.size(launchable)));
         if (attach) {
@@ -193,21 +193,23 @@ public class GenerateMojo extends AbstractMojo {
     }
 
     private Libraries libraries() {
-        List<Artifact> artifacts = new ArrayList<>();
+        List<Artifact> available = new ArrayList<>();
         for (Artifact artifact : project.getArtifacts()) {
             if (artifact.getArtifactHandler().isAddedToClasspath()
                     && (Artifact.SCOPE_COMPILE.equals(artifact.getScope()) || Artifact.SCOPE_RUNTIME.equals(artifact.getScope()))) {
-                artifacts.add(artifact);
+                available.add(artifact);
             }
         }
         return callback -> {
-            for (Artifact artifact : artifacts) {
-                var scope = Artifact.SCOPE_COMPILE.equals(artifact.getScope()) ? LibraryScope.COMPILE : LibraryScope.RUNTIME;
+            for (Artifact artifact : available) {
                 var file = artifact.getFile();
                 if (file == null || !file.isFile()) {
                     throw new IOException("unresolved dependency: " + artifact.getId());
                 }
-                callback.library(new Library(file.getName(), file, scope,
+                var scope = Artifact.SCOPE_COMPILE.equals(artifact.getScope())
+                        ? LibraryScope.COMPILE : LibraryScope.RUNTIME;
+                var libname = artifact.getGroupId().replace('.', '_') + "__" + file.getName();
+                callback.library(new Library(libname, file, scope,
                         LibraryCoordinates.of(artifact.getGroupId(), artifact.getArtifactId(), artifact.getVersion()),
                         false, false, true));
             }
