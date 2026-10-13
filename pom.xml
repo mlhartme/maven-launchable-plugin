@@ -22,14 +22,14 @@
 
   <groupId>net.oneandone.maven.plugins</groupId>
   <artifactId>launchable</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1-SNAPSHOT</version>
   <packaging>maven-plugin</packaging>
 
   <scm>
     <connection>scm:git:https://github.com/mlhartme/maven-launchable-plugin.git</connection>
     <developerConnection>scm:git:https://github.com/mlhartme/maven-launchable-plugin.git</developerConnection>
     <url>https://github.com/mlhartme/maven-launchable-plugin</url>
-    <tag>launchable-2.0.0</tag>
+    <tag>HEAD</tag>
   </scm>
 
   <properties>
