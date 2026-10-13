@@ -4,7 +4,7 @@
 
 * launcher: configurable java version, use jenv and /usr/libexec/java_home to switch
 
-## 2.0.0 (pending)
+## 2.0.0 (2026-10-13)
 
 * rename to maven-launchable-plugin
 * changed the jar generation to use Spring Boot's Repackaging mechanism
